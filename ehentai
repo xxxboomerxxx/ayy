@@ -1,0 +1,61 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use v5.010;
+
+&check_requirements;
+if ((! defined $ARGV[0]) || ($ARGV[0] eq '')) {
+    &print_usage;
+}
+
+sub print_usage {
+    say "Usage: " . $0 . " <e-hentai.org album URL>";
+    say "   Ex: " . $0 . " https://e-hentai.org/g/1045617/188d61684d/";
+    exit 1;
+}
+
+sub check_requirements {
+    for (qw / egrep curl wget /) {
+        my $str = qx % which "$_" %;
+        if (length($str) < 1) {
+            say "$_ is required to run this program.";
+            exit 1;
+        }
+    }
+}
+
+say "This might take a while...";
+
+my @IMAGES;
+my $PAGE = "";
+my $OLD_PAGE = "";
+my $PAGE1 = qx % curl -s "$ARGV[0]" | grep -Eo '<a href=\"[^\"]+\"><img alt=\"[^\"]+\" title="Page 1:' %;
+if ($PAGE1 =~ /<a href="([^\"]+)"><img/) {
+    $PAGE = $1;
+}
+
+while(1) {
+
+    if ($PAGE eq $OLD_PAGE) {
+        last;
+    }
+
+    my $IMAGE_URL = qx % curl -s "$PAGE" | grep -Eo '<img id="img" src="[^\"]+" style' %;
+    if ($IMAGE_URL =~ /<img id..img..src.\"([^\"]+)\" style/) {
+        push @IMAGES, $1;
+    }    
+
+    my $TEMP_PAGE = qx % curl -s "$PAGE" | grep -Eo 'href="[^\"]+"><img src=\"[^\"]+n.png"' | head -qn 1 %;
+    if ($TEMP_PAGE =~ /href=\"([^\"]+)\"><img/) {
+        $OLD_PAGE = $PAGE;
+        $PAGE = $1;
+    }
+}
+
+say "Attempting to download " . scalar(@IMAGES) . " images..";
+
+for (@IMAGES) {
+    qx % wget -qnc "$_"%;
+}
+
+say "Done!";
